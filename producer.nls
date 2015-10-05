@@ -1,0 +1,116 @@
+breed
+[
+	producers
+	producer
+]
+
+producers-own
+[
+	producer-state 								;string: "idle", "working"
+	producer-energy-production-rate 			;integer
+	producer-in-tick-available-energy 			;integer
+	producer-production-type 					;"renewable", "fossil", "nuclear"
+]
+
+;PLAN
+to producer-operate
+	producer-layout
+	producer-keep-production-up
+	producer-rest
+end
+
+;GOALS
+to producer-layout
+	layout-spring producers power-lines init-power-line-constant init-power-line-length init-power-line-repulsion
+end
+
+to producer-keep-production-up
+	update-producer-in-tick-available-energy init-producer-energy-production-rate
+end
+
+to producer-rest
+	if (producer-state = "working" and any? power-line-neighbors with [ distributor-state = "idle" ])
+	[
+		producer-switch-off
+	]
+end
+
+to give [ requested-energy ]
+	let available-energy (producer-in-tick-available-energy)
+	ifelse (available-energy >= requested-energy)
+	[
+		update-producer-in-tick-available-energy (- requested-energy)
+		ask power-line-neighbors
+		[
+			update-distributor-current-storage-level requested-energy
+		]
+	]
+	[
+		update-producer-in-tick-available-energy (- available-energy)
+		ask power-line-neighbors
+		[
+			update-distributor-current-storage-level available-energy
+		]
+		if (distribution-switch)
+		[
+			let missing-energy (requested-energy - available-energy)
+			ifelse (missing-energy > 0)
+			[
+				ask power-line-neighbors
+				[
+					;case select for experiments
+					if distribution-type = "Increasing"
+					[
+						distributor-ask-neighboring-distributors-for-inc missing-energy
+					]
+					if distribution-type = "Decreasing"
+					[
+						distributor-ask-neighboring-distributors-for-desc missing-energy
+					]
+					if distribution-type = "Random"
+					[
+						distributor-ask-neighboring-distributors-for-rnd missing-energy
+					]
+					if distribution-type = "Progressive"
+					[
+						distributor-ask-neighboring-distributors-for-progressive missing-energy
+					]
+					if distribution-type = "Parametric1"
+					[
+						distributor-ask-neighboring-distributors-for-parametric1 missing-energy
+					]
+					if distribution-type = "Parametric2"
+					[
+						distributor-ask-neighboring-distributors-for-parametric2 missing-energy
+					]
+					if distribution-type = "Parametric3"
+					[
+						distributor-ask-neighboring-distributors-for-parametric3 missing-energy
+					]
+				]
+			]
+			[
+				stop
+			]
+		]
+	]
+end
+
+;ACTIONS
+to producer-switch-on
+	set color red
+	set producer-state "working"
+end
+
+to producer-switch-off
+	set color green
+	set producer-state "idle"
+end
+
+to update-producer-in-tick-available-energy [ energy ]
+	set producer-in-tick-available-energy (producer-in-tick-available-energy + energy)
+	if (producer-in-tick-available-energy > init-producer-energy-production-rate)
+		[
+			set producer-in-tick-available-energy init-producer-energy-production-rate
+		]
+end

@@ -1,0 +1,10 @@
+undirected-link-breed
+[
+	power-lines
+	power-line
+]
+
+power-lines-own
+[
+	cost
+]

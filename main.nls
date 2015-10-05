@@ -1,0 +1,28 @@
+to go
+	go-consumers
+	go-distributors
+	go-producers
+	calculate-gini
+	tick
+end
+
+to go-consumers
+	ask-concurrent consumers
+	[
+		consumer-operate
+	]
+end
+
+to go-distributors
+	ask-concurrent distributors
+	[
+		distributor-operate
+	]
+end
+
+to go-producers
+	ask-concurrent producers
+	[
+		producer-operate
+	]
+end

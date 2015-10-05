@@ -1,0 +1,603 @@
+breed
+[
+	distributors
+	distributor
+]
+
+distributors-own
+[
+	distributor-state 					;string: "idle", "working", "linking"
+	distributor-maximum-storage-level 	;integer
+	distributor-current-storage-level 	;integer
+	distributor-discharge-energy-rate 	;integer
+	distributor-closest-distributor 	;distributor
+	distributor-granularity 			;integer
+	distributor-step 					;integer
+	distributor-num-current-consumers 	;integer
+	distributor-num-current-producers 	;integer
+	distributor-parameter				;float: [0, 1]
+]
+
+;PLAN
+to distributor-operate
+	distributor-self-adapt
+	distributor-self-organize
+	distributor-work
+end
+
+
+;GOALS
+to distributor-self-adapt
+	update-distributor-closest-distributor
+	update-distributor-step
+	update-distributor-granularity
+	update-distributor-num-current-consumers
+	update-distributor-num-current-producers
+end
+
+to distributor-self-organize
+	distributor-assemble
+	distributor-disconnect-from-distant-distributors
+	distributor-connect-to-close-distributors
+end
+
+to distributor-work
+	ifelse (distributor-num-current-consumers > 0)
+	[
+		distributor-recharge
+	]
+	[
+		update-distributor-state "idle"
+		distributor-discharge
+	]
+end
+
+;ACTIONS
+to update-distributor-state [ new-state ]
+	if (new-state = "idle")
+	[
+		set distributor-state new-state
+		set color green
+	]
+
+	if (new-state = "working")
+	[
+		set distributor-state new-state
+		set color red
+	]
+
+	if (new-state = "linking")
+	[
+		set distributor-state new-state
+		set color pink
+	]
+end
+
+to update-distributor-maximum-storage-level [ energy-level ]
+	set distributor-maximum-storage-level (energy-level)
+end
+
+to update-distributor-current-storage-level [ energy ]
+	let total (distributor-current-storage-level + energy)
+	ifelse (total <= distributor-maximum-storage-level)
+	[
+		set distributor-current-storage-level (total)
+	]
+	[
+		set distributor-current-storage-level distributor-maximum-storage-level
+	]
+end
+
+to update-distributor-discharge-energy-rate [ energy ]
+	set distributor-discharge-energy-rate (energy)
+end
+
+to update-distributor-closest-distributor
+	set distributor-closest-distributor (min-one-of other distributors [ distance myself ])
+end
+
+to update-distributor-step
+	if (count distributors > 1)
+	[
+		set distributor-step ((distance distributor-closest-distributor) / distributor-granularity)
+	]
+end
+
+to update-distributor-granularity
+	if (ticks < 1000)
+	[
+		set distributor-granularity (distributor-granularity + 1)
+	]
+end
+
+to update-distributor-num-current-consumers
+	set distributor-num-current-consumers (count my-connections)
+end
+
+to update-distributor-num-current-producers
+	set distributor-num-current-producers (count my-power-lines)
+end
+
+to distributor-assemble
+	if (count distributors > 1)
+	[
+		ifelse (distance distributor-closest-distributor >= init-distributor-radius)
+		[
+			;cluster
+			face patch 0 0
+			forward distributor-step
+		]
+		[
+			;move apart
+			face distributor-closest-distributor
+			back distributor-step
+		]
+	]
+end
+
+to distributor-disconnect-from-distant-distributors
+	foreach sort distributors
+	[
+		if (distance ? > init-distributor-disconnection-criterion * init-distributor-radius) ;fix connection factor
+		[
+			if (distribution-line-neighbor? ?)
+			[
+				ask distribution-line-with ? 
+				[
+					die
+				]
+			]
+		]
+	]
+end
+
+to distributor-connect-to-close-distributors
+	if (count distributors > 1)
+	[
+		ifelse (distance distributor-closest-distributor >= init-distributor-connection-criterion * init-distributor-radius)
+		[
+			if (distribution-line-neighbor? distributor-closest-distributor)
+			[
+				ask distribution-line-with distributor-closest-distributor
+				[
+					die
+				]
+			]
+		]
+		[
+			create-distribution-line-with distributor-closest-distributor
+			[
+				set color yellow
+			]
+		]
+	]
+end
+
+to distributor-recharge
+	;assume connection to a producer
+	ask power-line-neighbors
+	[
+		producer-switch-on
+	]
+end
+
+to distributor-discharge
+	ifelse (distributor-current-storage-level > 0 and distributor-current-storage-level > init-distributor-discharge-energy-rate)
+	[
+		update-distributor-current-storage-level (- init-distributor-discharge-energy-rate)
+	]
+	[
+		set distributor-current-storage-level 0
+	]
+end
+
+to distributor-supply [ energy ]
+	distributor-consumers-layout
+	update-distributor-state "working"
+	ifelse (energy <= distributor-maximum-storage-level)
+	[
+		ifelse (energy <= distributor-current-storage-level)
+		[
+			update-distributor-current-storage-level (- energy)
+			ask myself
+			[
+				update-consumer-current-energy-level energy
+			]
+		]
+		[
+			let dcsl distributor-current-storage-level
+			let missing-energy (energy - dcsl)
+			distributor-ask-producers-for missing-energy
+			update-distributor-current-storage-level (- dcsl)
+			ask myself
+			[
+				update-consumer-current-energy-level dcsl
+			]
+		]
+	]
+	[
+		ifelse (distributor-current-storage-level = distributor-maximum-storage-level)
+		[
+			let dcsl distributor-current-storage-level
+			update-distributor-current-storage-level (- dcsl)
+			ask myself
+			[
+				update-consumer-current-energy-level dcsl
+			]
+		]
+		[
+			let missing-energy (distributor-maximum-storage-level - distributor-current-storage-level)
+			distributor-ask-producers-for missing-energy
+		]
+	]
+end
+
+to distributor-consumers-layout
+	layout-spring consumers with [ consumer-state = "charging" ] connections init-connection-constant init-connection-length init-connection-repulsion
+end
+
+to distributor-ask-producers-for [ energy ]
+	distributor-recharge
+	ask power-line-neighbors with [ producer-state = "working" ]
+	[
+		give energy
+	]
+end
+
+to distributor-ask-neighboring-distributors-for-inc [ energy ]
+	let missing-energy energy
+	if (missing-energy > 0)
+	[
+		foreach sort-on [ (distributor-current-storage-level) ] distribution-line-neighbors with [ distributor-state = "idle" ]
+		[
+			ask ?
+			[
+				update-distributor-state "linking"
+				ifelse (missing-energy <= distributor-maximum-storage-level)
+				[
+					ifelse (missing-energy <= distributor-current-storage-level)
+					[
+						update-distributor-current-storage-level (- missing-energy)
+						ask myself
+						[
+							update-distributor-current-storage-level missing-energy
+						]
+					]
+					[
+						let dcsl distributor-current-storage-level
+						if (distributor-current-storage-level > 0)
+						[
+							update-distributor-current-storage-level (- dcsl)
+							ask myself
+							[
+								update-distributor-current-storage-level dcsl
+							]
+						]
+						set missing-energy (missing-energy - dcsl)
+						distributor-ask-producers-for missing-energy
+					]
+				]
+				[
+					let dcsl distributor-current-storage-level
+					update-distributor-current-storage-level (- dcsl)
+					ask myself
+					[
+						update-distributor-current-storage-level dcsl
+					]
+					set missing-energy (missing-energy - dcsl)
+					distributor-ask-neighboring-distributors-for-inc missing-energy
+				]
+			]
+		]
+	]
+end
+
+to distributor-ask-neighboring-distributors-for-desc [ energy ]
+	let missing-energy energy
+	if (missing-energy > 0)
+	[
+		foreach sort-on [ (- distributor-current-storage-level) ] distribution-line-neighbors with [ distributor-state = "idle" ]
+		[
+			ask ?
+			[
+				update-distributor-state "linking"
+				ifelse (missing-energy <= distributor-maximum-storage-level)
+				[
+					ifelse (missing-energy <= distributor-current-storage-level)
+					[
+						update-distributor-current-storage-level (- missing-energy)
+						ask myself
+						[
+							update-distributor-current-storage-level missing-energy
+						]
+					]
+					[
+						let dcsl distributor-current-storage-level
+						if (distributor-current-storage-level > 0)
+						[
+							update-distributor-current-storage-level (- dcsl)
+							ask myself
+							[
+								update-distributor-current-storage-level dcsl
+							]
+						]
+						set missing-energy (missing-energy - dcsl)
+						distributor-ask-producers-for missing-energy
+					]
+				]
+				[
+					let dcsl distributor-current-storage-level
+					update-distributor-current-storage-level (- dcsl)
+					ask myself
+					[
+						update-distributor-current-storage-level dcsl
+					]
+					set missing-energy (missing-energy - dcsl)
+					distributor-ask-neighboring-distributors-for-desc missing-energy
+				]
+			]
+		]
+	]
+end
+
+to distributor-ask-neighboring-distributors-for-rnd [ energy ]
+	let missing-energy energy
+	let sorted-storage-levels sort [ distributor-current-storage-level ] of distribution-line-neighbors
+	let total-energy sum sorted-storage-levels
+	
+	if (missing-energy > 0)
+	[
+		if (total-energy > 0)
+		[
+			foreach sort-on [ (- distributor-current-storage-level) ] distribution-line-neighbors with [ distributor-state = "idle" ]
+			[
+				ask ?
+				[
+					update-distributor-state "linking"
+					if ((random 2) > 0)
+					[
+						ifelse (distributor-current-storage-level > 0)
+						[
+							let random-amount ((random distributor-current-storage-level) + 1)
+							update-distributor-current-storage-level (- random-amount)
+							ask myself
+							[
+								update-distributor-current-storage-level random-amount
+							]
+							set missing-energy (missing-energy - random-amount)
+						]
+						[
+							distributor-ask-neighboring-distributors-for-rnd missing-energy
+						]
+					]
+				]
+			]
+		]
+	]
+end 		
+
+to distributor-ask-neighboring-distributors-for-progressive [ energy ]
+	let missing-energy energy
+	let sorted-storage-levels sort [ distributor-current-storage-level ] of distribution-line-neighbors
+	let total-energy sum sorted-storage-levels
+	
+	if (missing-energy > 0)
+	[
+		while [total-energy > 0]
+		[
+			ask max-one-of distribution-line-neighbors [ distributor-current-storage-level ]
+			[
+				update-distributor-state "linking"
+				ifelse (distributor-current-storage-level > 0)
+				[
+					let progressive-amount 1 
+					update-distributor-current-storage-level (- progressive-amount)
+					ask myself
+					[
+						update-distributor-current-storage-level progressive-amount
+					]
+					set missing-energy (missing-energy - progressive-amount)
+					set total-energy (total-energy - progressive-amount)
+				]
+				[
+					distributor-ask-neighboring-distributors-for-rnd missing-energy
+				]
+			]
+		]
+	]
+end
+
+to distributor-ask-neighboring-distributors-for-parametric1 [ energy ]
+	let missing-energy energy
+	let sorted-storage-levels sort [ distributor-current-storage-level ] of distribution-line-neighbors
+	let total-energy sum sorted-storage-levels
+
+	ifelse ((random 4) > 0)
+	[
+		if (missing-energy > 0)
+		[
+			while [total-energy > 0]
+			[
+				ask max-one-of distribution-line-neighbors [ distributor-current-storage-level ]
+				[
+					update-distributor-state "linking"
+					ifelse (distributor-current-storage-level > 0)
+					[
+						let progressive-amount 1 
+						update-distributor-current-storage-level (- progressive-amount)
+						ask myself
+						[
+							update-distributor-current-storage-level progressive-amount
+						]
+						set missing-energy (missing-energy - progressive-amount)
+						set total-energy (total-energy - progressive-amount)
+					]
+					[
+						distributor-ask-neighboring-distributors-for-parametric1 missing-energy
+					]
+				]
+			]
+		]
+	]
+	[
+		if (missing-energy > 0)
+		[
+			if (total-energy > 0)
+			[
+				foreach butfirst sort-on [ (- distributor-current-storage-level) ] distribution-line-neighbors with [ distributor-state = "idle" ]
+				[
+					ask ?
+					[
+						update-distributor-state "linking"
+						if ((random 2) > 0)
+						[
+							ifelse (distributor-current-storage-level > 0)
+							[
+								let random-amount ((random distributor-current-storage-level) + 1)
+								update-distributor-current-storage-level (- random-amount)
+								ask myself
+								[
+									update-distributor-current-storage-level random-amount
+								]
+								set missing-energy (missing-energy - random-amount)
+							]
+							[
+								distributor-ask-neighboring-distributors-for-parametric1 missing-energy
+							]
+						]
+					]
+				]
+			]
+		]
+	]
+end
+
+to distributor-ask-neighboring-distributors-for-parametric2 [ energy ]
+	let missing-energy energy
+	let sorted-storage-levels sort [ distributor-current-storage-level ] of distribution-line-neighbors
+	let total-energy sum sorted-storage-levels
+
+	ifelse ((random 4) > 1)
+	[
+		if (missing-energy > 0)
+		[
+			while [total-energy > 0]
+			[
+				ask max-one-of distribution-line-neighbors [ distributor-current-storage-level ]
+				[
+					update-distributor-state "linking"
+					ifelse (distributor-current-storage-level > 0)
+					[
+						let progressive-amount 1 
+						update-distributor-current-storage-level (- progressive-amount)
+						ask myself
+						[
+							update-distributor-current-storage-level progressive-amount
+						]
+						set missing-energy (missing-energy - progressive-amount)
+						set total-energy (total-energy - progressive-amount)
+					]
+					[
+						distributor-ask-neighboring-distributors-for-parametric2 missing-energy
+					]
+				]
+			]
+		]
+	]
+	[
+		if (missing-energy > 0)
+		[
+			if (total-energy > 0)
+			[
+				foreach butfirst sort-on [ (- distributor-current-storage-level) ] distribution-line-neighbors with [ distributor-state = "idle" ]
+				[
+					ask ?
+					[
+						update-distributor-state "linking"
+						if ((random 2) > 0)
+						[
+							ifelse (distributor-current-storage-level > 0)
+							[
+								let random-amount ((random distributor-current-storage-level) + 1)
+								update-distributor-current-storage-level (- random-amount)
+								ask myself
+								[
+									update-distributor-current-storage-level random-amount
+								]
+								set missing-energy (missing-energy - random-amount)
+							]
+							[
+								distributor-ask-neighboring-distributors-for-parametric2 missing-energy
+							]
+						]
+					]
+				]
+			]
+		]
+	]
+end
+
+to distributor-ask-neighboring-distributors-for-parametric3 [ energy ]
+	let missing-energy energy
+	let sorted-storage-levels sort [ distributor-current-storage-level ] of distribution-line-neighbors
+	let total-energy sum sorted-storage-levels
+
+	ifelse ((random 4) > 2)
+	[
+		if (missing-energy > 0)
+		[
+			while [total-energy > 0]
+			[
+				ask max-one-of distribution-line-neighbors [ distributor-current-storage-level ]
+				[
+					update-distributor-state "linking"
+					ifelse (distributor-current-storage-level > 0)
+					[
+						let progressive-amount 1 
+						update-distributor-current-storage-level (- progressive-amount)
+						ask myself
+						[
+							update-distributor-current-storage-level progressive-amount
+						]
+						set missing-energy (missing-energy - progressive-amount)
+						set total-energy (total-energy - progressive-amount)
+					]
+					[
+						distributor-ask-neighboring-distributors-for-parametric3 missing-energy
+					]
+				]
+			]
+		]
+	]
+	[
+		if (missing-energy > 0)
+		[
+			if (total-energy > 0)
+			[
+				foreach butfirst sort-on [ (- distributor-current-storage-level) ] distribution-line-neighbors with [ distributor-state = "idle" ]
+				[
+					ask ?
+					[
+						update-distributor-state "linking"
+						if ((random 2) > 0)
+						[
+							ifelse (distributor-current-storage-level > 0)
+							[
+								let random-amount ((random distributor-current-storage-level) + 1)
+								update-distributor-current-storage-level (- random-amount)
+								ask myself
+								[
+									update-distributor-current-storage-level random-amount
+								]
+								set missing-energy (missing-energy - random-amount)
+							]
+							[
+								distributor-ask-neighboring-distributors-for-parametric3 missing-energy
+							]
+						]
+					]
+				]
+			]
+		]
+	]
+end

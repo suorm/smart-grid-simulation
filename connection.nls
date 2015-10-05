@@ -1,0 +1,11 @@
+undirected-link-breed
+[
+	connections
+	connection
+]
+
+connections-own
+[
+	connection-length
+	cost
+]

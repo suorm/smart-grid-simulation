@@ -1,0 +1,40 @@
+to calculate-gini
+	let total-energy 0
+	let sorted-storage-levels 0
+	let energy-sum-so-far 0
+	let index 0
+
+	;plot Lorenz curve
+	set-current-plot "Lorenz Curve"
+	clear-plot
+	set-current-plot-pen "equal"
+	plot 0
+	plot 100
+	set-current-plot-pen "lorenz"
+	set-plot-pen-interval 100 / count distributors  
+	plot 0
+
+	set sorted-storage-levels sort [ distributor-current-storage-level ] of distributors
+	set total-energy sum sorted-storage-levels
+	set energy-sum-so-far 0
+	set index 0
+	set gini-index-reserve 0
+
+	;plot Gini index
+	repeat count distributors
+	[
+		set energy-sum-so-far (energy-sum-so-far + item index sorted-storage-levels)
+		plot (energy-sum-so-far / (total-energy + 1)) * 100 ;division by 0
+		set index (index + 1) ;division by 0
+		set gini-index-reserve gini-index-reserve + (index / count distributors ) - (energy-sum-so-far / (total-energy + 1)) ;division by 0
+	]
+	set-current-plot "Gini"
+	plot (gini-index-reserve / count distributors ) / area-of-equality-triangle
+	set gini-count  (gini-index-reserve / count distributors ) / area-of-equality-triangle
+
+end
+
+to-report area-of-equality-triangle
+	report (count distributors * (count distributors - 1) / 2) / (count distributors ^ 2)
+end
+

@@ -1,0 +1,94 @@
+to setup
+	clear-all
+	reset-ticks
+	random-seed seed
+	setup-consumers
+	setup-distributors
+	setup-producers
+	setup-connections
+	setup-distribution-lines
+	setup-power-lines
+	calculate-gini
+end
+
+to setup-consumers
+	create-consumers init-consumer-num-consumers
+	ask consumers
+	[
+		set shape "car top"
+		set color (one-of [ 44 45 46 47 ])
+		set size 2
+		set xcor random-xcor
+		set ycor random-ycor
+		set consumer-step init-consumer-step
+		set consumer-angle init-consumer-angle
+		set consumer-energy-wasted-per-step init-consumer-energy-wasted-per-step
+		;set consumer-maximum-energy-level (init-consumer-maximum-energy-level + random (init-consumer-maximum-energy-level))
+		set consumer-maximum-energy-level init-consumer-maximum-energy-level
+		set consumer-current-energy-level (consumer-maximum-energy-level - random(50))
+		set consumer-state "wandering"
+	]
+end
+
+to setup-distributors
+	create-distributors init-distributor-num-distributors
+	ask distributors
+	[
+		set shape "electric outlet"
+		set color green
+		set size 5
+		set heading 0
+		set xcor random-xcor
+		set ycor random-ycor
+		set distributor-maximum-storage-level init-distributor-maximum-storage-level
+		set distributor-discharge-energy-rate init-distributor-discharge-energy-rate
+		set distributor-current-storage-level init-distributor-maximum-storage-level
+		set distributor-granularity init-distributor-granularity
+		set distributor-step init-distributor-radius
+		set distributor-state "idle"
+		set distributor-parameter init-distributor-parameter
+	]
+end
+
+to setup-producers
+	ask distributors
+	[
+		hatch-producers 1
+		[
+			set shape "factory"
+			set color green
+			set size 5
+			set heading 0
+			set producer-energy-production-rate init-producer-energy-production-rate
+			set producer-state "idle"
+			set producer-production-type "renewable"
+			fd init-power-line-length
+			create-power-line-with myself
+			[
+				set color red
+			]
+		]
+	]
+end
+
+to setup-distribution-lines
+	set-default-shape distribution-lines "distribution-line"
+	if (count distributors > 1)
+	[
+		ask distributors
+		[
+			create-distribution-lines-with n-of 1 other distributors
+			[
+				set color yellow
+			]
+		]
+	]
+end
+
+to setup-power-lines
+	set-default-shape power-lines "power-line"
+end
+
+to setup-connections
+	set-default-shape connections "connection"
+end

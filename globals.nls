@@ -1,0 +1,6 @@
+globals
+	[
+		lorenz-points
+		gini-index-reserve
+		gini-count
+	]

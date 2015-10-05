@@ -1,0 +1,136 @@
+breed
+[
+	consumers
+	consumer
+]
+
+consumers-own
+[
+	consumer-state 						;string: "wandering", "going to charge", "charging"
+	consumer-maximum-energy-level 		;integer
+	consumer-current-energy-level 		;integer
+	consumer-closest-distributor 		;distributor
+	consumer-angle 						;integer
+	consumer-step 						;integer
+	consumer-energy-wasted-per-step 	;integer
+]
+
+;PLAN
+to consumer-operate
+	update-consumer-closest-distributor
+	let angle consumer-angle
+	let step consumer-step
+	let energy consumer-energy-wasted-per-step
+	if (consumer-state = "wandering")
+	[
+		ifelse (distance consumer-closest-distributor) < consumer-current-energy-level
+		[
+			consumer-wander consumer-angle consumer-step consumer-energy-wasted-per-step
+		]
+		[
+			consumer-go-to-charge consumer-step consumer-energy-wasted-per-step
+		]
+		stop
+	]
+	if (consumer-state = "going to charge")
+	[
+		ifelse ((distance consumer-closest-distributor) < init-connection-length)
+		[
+			consumer-connect consumer-closest-distributor
+			let missing-energy (consumer-maximum-energy-level - consumer-current-energy-level)
+			consumer-charge missing-energy
+		]
+		[
+			consumer-go-to-charge consumer-step consumer-energy-wasted-per-step
+		]
+		stop
+	]
+	if (consumer-state = "charging")
+	[
+		ifelse (consumer-current-energy-level < consumer-maximum-energy-level)
+		[
+			let missing-energy (consumer-maximum-energy-level - consumer-current-energy-level)
+			consumer-charge missing-energy ;or stop?
+		]
+		[
+			consumer-disconnect
+			consumer-wander consumer-angle consumer-step consumer-energy-wasted-per-step
+		]
+		stop
+	]
+	if (consumer-state != "wandering" and consumer-state != "going to charge" and consumer-state != "charging")
+	[
+		die
+	]
+end
+
+;GOALS
+to consumer-wander [ direction step energy ]
+	update-consumer-state "wandering"
+	update-consumer-heading direction
+	update-consumer-position step
+	update-consumer-current-energy-level (- energy)
+end
+
+to consumer-go-to-charge [ step energy ]
+	update-consumer-state "going to charge"
+	face consumer-closest-distributor
+	update-consumer-position step
+	update-consumer-current-energy-level (- energy)
+end
+
+to consumer-connect [ distributor ]
+	create-connection-with distributor
+	[
+		set-connection-color white
+	]
+end
+
+to consumer-charge [ energy ]
+	update-consumer-state "charging"
+	carefully
+	[
+		ask connection-neighbors
+		[
+			distributor-supply energy
+		]
+	]
+	[
+	]
+end
+
+to consumer-disconnect
+	ask my-connections
+	[
+		die
+	]
+end
+
+;ACTIONS
+to update-consumer-closest-distributor
+	set consumer-closest-distributor (min-one-of other distributors [ distance myself ])
+end
+
+to update-consumer-state [ new-state ]
+	set consumer-state new-state
+end
+
+to update-consumer-heading [ direction ]
+	set heading (heading + direction - (random (2 * direction)))
+end
+
+to update-consumer-position [ step ]
+	forward step
+end
+
+to update-consumer-current-energy-level [ energy ]
+	set consumer-current-energy-level (consumer-current-energy-level + energy)
+end
+
+to update-consumer-maximum-energy-level [ energy-level ]
+	set consumer-maximum-energy-level energy-level
+end
+
+to set-connection-color [ new-color ]
+	set color new-color
+end
