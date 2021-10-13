@@ -6,16 +6,16 @@ breed
 
 distributors-own
 [
-	distributor-state 					;string: "idle", "working", "linking"
+	distributor-state 			;string: "idle", "working", "linking"
 	distributor-maximum-storage-level 	;integer
 	distributor-current-storage-level 	;integer
 	distributor-discharge-energy-rate 	;integer
 	distributor-closest-distributor 	;distributor
-	distributor-granularity 			;integer
-	distributor-step 					;integer
+	distributor-granularity 		;integer
+	distributor-step 			;integer
 	distributor-num-current-consumers 	;integer
 	distributor-num-current-producers 	;integer
-	distributor-parameter				;float: [0, 1]
+	distributor-parameter			;float: [0, 1]
 ]
 
 ;PLAN
