@@ -6,12 +6,12 @@ breed
 
 consumers-own
 [
-	consumer-state 						;string: "wandering", "going to charge", "charging"
+	consumer-state 				;string: "wandering", "going to charge", "charging"
 	consumer-maximum-energy-level 		;integer
 	consumer-current-energy-level 		;integer
 	consumer-closest-distributor 		;distributor
-	consumer-angle 						;integer
-	consumer-step 						;integer
+	consumer-angle 				;integer
+	consumer-step 				;integer
 	consumer-energy-wasted-per-step 	;integer
 ]
 
