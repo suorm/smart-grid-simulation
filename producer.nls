@@ -6,10 +6,10 @@ breed
 
 producers-own
 [
-	producer-state 								;string: "idle", "working"
+	producer-state 						;string: "idle", "working"
 	producer-energy-production-rate 			;integer
 	producer-in-tick-available-energy 			;integer
-	producer-production-type 					;"renewable", "fossil", "nuclear"
+	producer-production-type 				;"renewable", "fossil", "nuclear"
 ]
 
 ;PLAN
